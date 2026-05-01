@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>AA分账工具Pro</title>
+<title>AA分账工具 Pro</title>
 
 <style>
 body {
@@ -65,6 +65,11 @@ button.delete {
   color: green;
   font-weight: bold;
 }
+
+.detail {
+  font-size: 14px;
+  line-height: 1.6;
+}
 </style>
 
 </head>
@@ -97,6 +102,11 @@ button.delete {
 <div class="card">
   <h3>结算结果</h3>
   <div id="result" class="result"></div>
+</div>
+
+<div class="card">
+  <h3>详细计算过程</h3>
+  <div id="detail" class="detail"></div>
 </div>
 
 </div>
@@ -166,17 +176,54 @@ function calculate(){
   }
 
   let balance = {};
+  let detailMap = {};
 
+  // 初始化
+  expenses.forEach(e=>{
+    e.people.forEach(p=>{
+      if(!balance[p]){
+        balance[p] = 0;
+        detailMap[p] = [];
+      }
+    });
+
+    if(!balance[e.payer]){
+      balance[e.payer] = 0;
+      detailMap[e.payer] = [];
+    }
+  });
+
+  // 计算
   expenses.forEach(e=>{
     let share = e.amount / e.people.length;
 
-    e.people.forEach(p=>{
-      balance[p] = (balance[p] || 0) - share;
-    });
+    balance[e.payer] += e.amount;
+    detailMap[e.payer].push(`+ 支付【${e.project}】 ${e.amount}`);
 
-    balance[e.payer] = (balance[e.payer] || 0) + e.amount;
+    e.people.forEach(p=>{
+      balance[p] -= share;
+      detailMap[p].push(`- 分摊【${e.project}】 ${share.toFixed(2)}`);
+    });
   });
 
+  // 详细展示
+  let detailHTML = "";
+
+  for(let p in balance){
+    detailHTML += `<div style="margin-bottom:10px;">`;
+    detailHTML += `<b>${p}</b><br>`;
+
+    detailMap[p].forEach(line=>{
+      detailHTML += `${line}<br>`;
+    });
+
+    detailHTML += `<b>= 合计：${balance[p].toFixed(2)}</b>`;
+    detailHTML += `</div>`;
+  }
+
+  document.getElementById("detail").innerHTML = detailHTML;
+
+  // 结算
   let debtors = [];
   let creditors = [];
 
