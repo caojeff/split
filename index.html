@@ -76,6 +76,7 @@ button.delete {
 <h2>💰 AA分账工具 Pro</h2>
 
 <div class="card">
+  <input type="date" id="date">
   <input id="project" placeholder="项目（例如：吃饭、门票）">
   <input id="payer" placeholder="付款人">
   <input id="amount" type="number" placeholder="金额">
@@ -113,7 +114,7 @@ function render(){
     html += `
       <div class="item">
         <div>
-          [${e.project}] ${e.payer}：${e.amount}（${e.people.join(",")}）
+          ${e.date} | [${e.project}] ${e.payer}：${e.amount}（${e.people.join(",")}）
         </div>
         <button class="delete" onclick="remove(${i})">删除</button>
       </div>
@@ -129,28 +130,29 @@ function remove(i){
 }
 
 function addExpense(){
+  let date = document.getElementById("date").value;
   let project = document.getElementById("project").value.trim();
   let payer = document.getElementById("payer").value.trim();
   let amount = parseFloat(document.getElementById("amount").value);
   let peopleRaw = document.getElementById("people").value.trim();
 
-  if(!project || !payer || !amount || !peopleRaw){
+  if(!date || !project || !payer || !amount || !peopleRaw){
     alert("请填写完整信息");
     return;
   }
 
-  // ✅ 关键修复：支持中文逗号
   let people = peopleRaw
-    .replace(/，/g, ",")   // 中文逗号转英文
+    .replace(/，/g, ",")
     .split(",")
     .map(p => p.trim())
     .filter(p => p);
 
-  expenses.push({project, payer, amount, people});
+  expenses.push({date, project, payer, amount, people});
 
   save();
   render();
 
+  document.getElementById("date").value="";
   document.getElementById("project").value="";
   document.getElementById("payer").value="";
   document.getElementById("amount").value="";
