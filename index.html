@@ -3,12 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <title>AA分账工具</title>
+
 <style>
 body { font-family: Arial; max-width: 800px; margin: auto; }
 input, button { padding: 6px; margin: 5px; }
 table { border-collapse: collapse; width: 100%; margin-top: 10px;}
 td, th { border: 1px solid #ccc; padding: 8px; text-align: center;}
 </style>
+
 </head>
 
 <body>
@@ -34,9 +36,18 @@ td, th { border: 1px solid #ccc; padding: 8px; text-align: center;}
 let expenses = [];
 
 function addExpense(){
-    let payer = document.getElementById("payer").value;
+    let payer = document.getElementById("payer").value.trim();
     let amount = parseFloat(document.getElementById("amount").value);
-    let people = document.getElementById("people").value.split(",");
+    let peopleRaw = document.getElementById("people").value.trim();
+
+    // ✅ 修复1：输入校验（关键）
+    if(!payer || !amount || !peopleRaw){
+        alert("请填写完整信息");
+        return;
+    }
+
+    // ✅ 修复2：去空格（否则名字匹配失败）
+    let people = peopleRaw.split(",").map(p => p.trim()).filter(p => p);
 
     expenses.push({payer, amount, people});
 
@@ -52,26 +63,39 @@ function addExpense(){
 }
 
 function calculate(){
+
+    // ✅ 修复3：无数据提示
+    if(expenses.length === 0){
+        alert("请先添加消费记录");
+        return;
+    }
+
     let balance = {};
 
     expenses.forEach(e=>{
         let share = e.amount / e.people.length;
+
         e.people.forEach(p=>{
             balance[p] = (balance[p] || 0) - share;
         });
-        balance[e.payer] += e.amount;
+
+        balance[e.payer] = (balance[e.payer] || 0) + e.amount;
     });
 
     let debtors = [];
     let creditors = [];
 
     for(let p in balance){
-        if(balance[p] < 0){
+        if(balance[p] < -0.01){
             debtors.push({name:p, amt:-balance[p]});
-        } else if(balance[p] > 0){
+        } else if(balance[p] > 0.01){
             creditors.push({name:p, amt:balance[p]});
         }
     }
+
+    // ✅ 修复4：排序（否则有时候不出结果）
+    debtors.sort((a,b)=>b.amt-a.amt);
+    creditors.sort((a,b)=>b.amt-a.amt);
 
     let result = "";
     let i=0, j=0;
@@ -84,8 +108,13 @@ function calculate(){
         debtors[i].amt -= pay;
         creditors[j].amt -= pay;
 
-        if(debtors[i].amt===0) i++;
-        if(creditors[j].amt===0) j++;
+        if(debtors[i].amt < 0.01) i++;
+        if(creditors[j].amt < 0.01) j++;
+    }
+
+    // ✅ 修复5：兜底（防止空白）
+    if(result === ""){
+        result = "已平账，无需转账 👍";
     }
 
     document.getElementById("result").innerHTML = result;
