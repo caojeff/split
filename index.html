@@ -78,7 +78,7 @@ button.delete {
 
 <div class="container">
 
-<h2>💰 AA分账工具 Pro</h2>
+<h2>💰 AA分账工具 Pro（精确版）</h2>
 
 <div class="card">
   <input type="date" id="date">
@@ -193,20 +193,27 @@ function calculate(){
     }
   });
 
-  // 计算
+  // 计算（用“分”避免误差）
   expenses.forEach(e=>{
-    let share = e.amount / e.people.length;
+    let total = Math.round(e.amount * 100);
+    let share = Math.floor(total / e.people.length);
 
-    balance[e.payer] += e.amount;
+    balance[e.payer] += total;
     detailMap[e.payer].push(`+ 支付【${e.project}】 ${e.amount}`);
 
     e.people.forEach(p=>{
       balance[p] -= share;
-      detailMap[p].push(`- 分摊【${e.project}】 ${share.toFixed(2)}`);
+      detailMap[p].push(`- 分摊【${e.project}】 ${(share/100).toFixed(2)}`);
     });
+
+    // 余数处理
+    let remainder = total - share * e.people.length;
+    if(remainder > 0){
+      balance[e.payer] -= remainder;
+    }
   });
 
-  // 详细展示
+  // ===== 详细过程 =====
   let detailHTML = "";
 
   for(let p in balance){
@@ -217,20 +224,20 @@ function calculate(){
       detailHTML += `${line}<br>`;
     });
 
-    detailHTML += `<b>= 合计：${balance[p].toFixed(2)}</b>`;
+    detailHTML += `<b>= 合计：${(balance[p]/100).toFixed(2)}</b>`;
     detailHTML += `</div>`;
   }
 
   document.getElementById("detail").innerHTML = detailHTML;
 
-  // 结算
+  // ===== 精确核销 =====
   let debtors = [];
   let creditors = [];
 
   for(let p in balance){
-    if(balance[p] < -0.01){
+    if(balance[p] < 0){
       debtors.push({name:p, amt:-balance[p]});
-    } else if(balance[p] > 0.01){
+    } else if(balance[p] > 0){
       creditors.push({name:p, amt:balance[p]});
     }
   }
@@ -241,20 +248,22 @@ function calculate(){
   let result = "";
   let i=0, j=0;
 
-  while(i<debtors.length && j<creditors.length){
+  while(i < debtors.length && j < creditors.length){
     let pay = Math.min(debtors[i].amt, creditors[j].amt);
 
-    result += `${debtors[i].name} ➜ ${creditors[j].name} ：${pay.toFixed(2)}<br>`;
+    if(pay > 0){
+      result += `${debtors[i].name} ➜ ${creditors[j].name} ：${(pay/100).toFixed(2)}<br>`;
+    }
 
     debtors[i].amt -= pay;
     creditors[j].amt -= pay;
 
-    if(debtors[i].amt < 0.01) i++;
-    if(creditors[j].amt < 0.01) j++;
+    if(debtors[i].amt === 0) i++;
+    if(creditors[j].amt === 0) j++;
   }
 
   if(result === ""){
-    result = "已平账，无需转账 👍";
+    result = "已完全平账 👍";
   }
 
   document.getElementById("result").innerHTML = result;
