@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>AA分账工具 Pro（无缓存版）</title>
+<title>AA分账工具 Pro（终极修复版）</title>
 
 <style>
 body {
@@ -54,7 +54,8 @@ button.delete {
 <body>
 
 <div class="container">
-<h2>💰 AA分账工具（新会话版）</h2>
+
+<h2>💰 AA分账工具（终极修复版）</h2>
 
 <div class="card">
   <input type="date" id="date">
@@ -62,7 +63,7 @@ button.delete {
   <input id="payer" placeholder="付款人">
   <input id="amount" type="number" placeholder="金额">
   <input id="people" placeholder="参与人（支持中文逗号）">
-  <button onclick="addExpense()">添加</button>
+  <button onclick="addExpense()">添加消费</button>
 </div>
 
 <div class="card">
@@ -75,20 +76,25 @@ button.delete {
 </div>
 
 <div class="card">
-  <h3>项目结算</h3>
+  <h3>项目独立结算</h3>
   <div id="projectResult"></div>
 </div>
 
 <div class="card">
-  <h3>最终结果</h3>
+  <h3>最终结算结果</h3>
   <div id="result" class="result"></div>
+</div>
+
+<div class="card">
+  <h3>余额校验</h3>
+  <div id="detail"></div>
 </div>
 
 </div>
 
 <script>
 
-// ✅ 页面打开自动清缓存
+// ===== 每次打开清空 =====
 localStorage.removeItem("expenses");
 
 let expenses = [];
@@ -99,7 +105,7 @@ function render(){
     html += `
       <div class="item">
         <div>${e.date} | [${e.project}] ${e.payer}：${e.amount}</div>
-        <button class="delete" onclick="remove(${i})">删</button>
+        <button class="delete" onclick="remove(${i})">删除</button>
       </div>`;
   });
   document.getElementById("list").innerHTML = html;
@@ -140,66 +146,104 @@ function addExpense(){
 
 function calculate(){
 
-  let finalBalance = {};
+  if(expenses.length===0){
+    alert("请先添加数据");
+    return;
+  }
+
+  let debtMap = {};
   let projectHTML = "";
 
+  function addDebt(from,to,amt){
+    if(from===to) return;
+    if(!debtMap[from]) debtMap[from]={};
+    if(!debtMap[from][to]) debtMap[from][to]=0;
+    debtMap[from][to]+=amt;
+  }
+
+  // ===== 每个项目 =====
   expenses.forEach(e=>{
     let total = Math.round(e.amount*100);
     let share = Math.floor(total/e.people.length);
 
-    let balance = {};
+    let temp = {};
 
-    e.people.forEach(p=>{
-      balance[p]=0;
-      if(!finalBalance[p]) finalBalance[p]=0;
-    });
+    e.people.forEach(p=> temp[p]=-share);
+    temp[e.payer]=(temp[e.payer]||0)+total;
 
-    if(!balance[e.payer]) balance[e.payer]=0;
-    if(!finalBalance[e.payer]) finalBalance[e.payer]=0;
+    let debtors=[],creditors=[];
 
-    balance[e.payer]+=total;
-    e.people.forEach(p=> balance[p]-=share);
-
-    for(let p in balance){
-      finalBalance[p]+=balance[p];
+    for(let p in temp){
+      if(temp[p]<0) debtors.push({n:p,a:-temp[p]});
+      else if(temp[p]>0) creditors.push({n:p,a:temp[p]});
     }
 
-    let d=[],c=[];
-    for(let p in balance){
-      if(balance[p]<0) d.push({n:p,a:-balance[p]});
-      else if(balance[p]>0) c.push({n:p,a:balance[p]});
+    let i=0,j=0,res="";
+
+    while(i<debtors.length && j<creditors.length){
+      let pay=Math.min(debtors[i].a,creditors[j].a);
+
+      addDebt(debtors[i].n,creditors[j].n,pay);
+
+      res+=`${debtors[i].n} ➜ ${creditors[j].n} ：${(pay/100).toFixed(2)}<br>`;
+
+      debtors[i].a-=pay;
+      creditors[j].a-=pay;
+
+      if(debtors[i].a===0)i++;
+      if(creditors[j].a===0)j++;
     }
 
-    let res="",i=0,j=0;
-    while(i<d.length && j<c.length){
-      let pay=Math.min(d[i].a,c[j].a);
-      res+=`${d[i].n} ➜ ${c[j].n}：${(pay/100).toFixed(2)}<br>`;
-      d[i].a-=pay; c[j].a-=pay;
-      if(d[i].a===0)i++;
-      if(c[j].a===0)j++;
-    }
-
-    projectHTML+=`<div><b>${e.project}</b><br>${res}</div>`;
+    projectHTML+=`<div><b>【${e.project}】</b><br>${res}</div>`;
   });
 
-  document.getElementById("projectResult").innerHTML = projectHTML;
+  document.getElementById("projectResult").innerHTML=projectHTML;
 
-  let d=[],c=[];
-  for(let p in finalBalance){
-    if(finalBalance[p]<0)d.push({n:p,a:-finalBalance[p]});
-    else if(finalBalance[p]>0)c.push({n:p,a:finalBalance[p]});
+  // ===== 双向抵消 =====
+  let finalDebt={};
+
+  for(let a in debtMap){
+    for(let b in debtMap[a]){
+      let ab=debtMap[a][b];
+      let ba=(debtMap[b]&&debtMap[b][a])||0;
+
+      let net=ab-ba;
+
+      if(net>0){
+        if(!finalDebt[a]) finalDebt[a]={};
+        finalDebt[a][b]=net;
+      }
+    }
   }
 
-  let res="",i=0,j=0;
-  while(i<d.length && j<c.length){
-    let pay=Math.min(d[i].a,c[j].a);
-    res+=`${d[i].n} ➜ ${c[j].n}：${(pay/100).toFixed(2)}<br>`;
-    d[i].a-=pay; c[j].a-=pay;
-    if(d[i].a===0)i++;
-    if(c[j].a===0)j++;
+  // ===== 输出 =====
+  let result="";
+  for(let a in finalDebt){
+    for(let b in finalDebt[a]){
+      result+=`${a} ➜ ${b} ：${(finalDebt[a][b]/100).toFixed(2)}<br>`;
+    }
   }
 
-  document.getElementById("result").innerHTML = res || "已平账";
+  document.getElementById("result").innerHTML=result||"已平账";
+
+  // ===== 校验 =====
+  let summary={};
+
+  for(let a in finalDebt){
+    for(let b in finalDebt[a]){
+      let amt=finalDebt[a][b];
+
+      summary[a]=(summary[a]||0)-amt;
+      summary[b]=(summary[b]||0)+amt;
+    }
+  }
+
+  let detail="";
+  for(let p in summary){
+    detail+=`${p}：${(summary[p]/100).toFixed(2)}<br>`;
+  }
+
+  document.getElementById("detail").innerHTML=detail;
 }
 
 </script>
