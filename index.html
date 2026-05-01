@@ -2,52 +2,48 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>AA分账工具 Pro（终极修复版）</title>
+<title>AA分账工具 Pro（选择器版）</title>
 
 <style>
-body {
-  font-family: -apple-system, BlinkMacSystemFont;
-  background: #f5f6fa;
-  margin: 0;
-  padding: 20px;
-}
-.container { max-width: 800px; margin: auto; }
+body { font-family: -apple-system; background:#f5f6fa; padding:20px; }
+.container { max-width:800px; margin:auto; }
+
 .card {
-  background: #fff;
-  padding: 15px;
-  margin-bottom: 15px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  background:#fff;
+  padding:15px;
+  margin-bottom:15px;
+  border-radius:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.05);
 }
-h2 { text-align: center; }
+
 input {
-  width: 100%;
-  padding: 10px;
-  margin: 5px 0;
-  border-radius: 6px;
-  border: 1px solid #ddd;
+  width:100%; padding:10px; margin:5px 0;
+  border-radius:6px; border:1px solid #ddd;
 }
+
 button {
-  width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  border: none;
-  border-radius: 6px;
-  background: #1677ff;
-  color: white;
+  width:100%; padding:10px; margin-top:10px;
+  border:none; border-radius:6px;
+  background:#1677ff; color:#fff;
 }
+
 button.delete {
-  background: red;
-  width: auto;
-  padding: 5px 10px;
-  font-size: 12px;
+  background:red; width:auto; padding:5px 10px;
 }
-.item {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 5px;
+
+.person-tag {
+  display:inline-block;
+  padding:5px 10px;
+  margin:3px;
+  background:#eee;
+  border-radius:20px;
+  cursor:pointer;
 }
-.result { color: green; font-weight: bold; }
+
+.person-tag.active {
+  background:#1677ff;
+  color:#fff;
+}
 </style>
 </head>
 
@@ -55,60 +51,84 @@ button.delete {
 
 <div class="container">
 
-<h2>💰 AA分账工具（终极修复版）</h2>
+<h2>💰 AA分账工具（智能版）</h2>
 
 <div class="card">
-  <input type="date" id="date">
-  <input id="project" placeholder="项目">
-  <input id="payer" placeholder="付款人">
-  <input id="amount" type="number" placeholder="金额">
-  <input id="people" placeholder="参与人（支持中文逗号）">
-  <button onclick="addExpense()">添加消费</button>
+
+<input type="date" id="date">
+<input id="project" placeholder="项目">
+<input id="payer" placeholder="付款人">
+<input id="amount" type="number" placeholder="金额">
+
+<input id="peopleInput" placeholder="参与人（可输入或点击下面选择）">
+
+<div id="personSelector"></div>
+
+<button onclick="addExpense()">添加消费</button>
+
 </div>
 
 <div class="card">
-  <h3>消费记录</h3>
-  <div id="list"></div>
+<h3>消费记录</h3>
+<div id="list"></div>
 </div>
 
 <div class="card">
-  <button onclick="calculate()">一键结算</button>
+<button onclick="calculate()">一键结算</button>
 </div>
 
 <div class="card">
-  <h3>项目独立结算</h3>
-  <div id="projectResult"></div>
+<h3>项目结算</h3>
+<div id="projectResult"></div>
 </div>
 
 <div class="card">
-  <h3>最终结算结果</h3>
-  <div id="result" class="result"></div>
-</div>
-
-<div class="card">
-  <h3>余额校验</h3>
-  <div id="detail"></div>
+<h3>最终结果</h3>
+<div id="result"></div>
 </div>
 
 </div>
 
 <script>
 
-// ===== 每次打开清空 =====
-localStorage.removeItem("expenses");
-
+// ===== 内存数据（无缓存版）=====
 let expenses = [];
+let peopleDB = new Set();
+
+function renderSelector(){
+  let html="";
+  peopleDB.forEach(p=>{
+    html+=`<span class="person-tag" onclick="togglePerson(this,'${p}')">${p}</span>`;
+  });
+  document.getElementById("personSelector").innerHTML=html;
+}
+
+function togglePerson(el,name){
+  el.classList.toggle("active");
+
+  let input=document.getElementById("peopleInput");
+  let list=input.value.replace(/，/g,",").split(",").map(x=>x.trim()).filter(x=>x);
+
+  if(el.classList.contains("active")){
+    if(!list.includes(name)) list.push(name);
+  }else{
+    list=list.filter(x=>x!==name);
+  }
+
+  input.value=list.join(",");
+}
 
 function render(){
-  let html = "";
+  let html="";
   expenses.forEach((e,i)=>{
-    html += `
-      <div class="item">
-        <div>${e.date} | [${e.project}] ${e.payer}：${e.amount}</div>
-        <button class="delete" onclick="remove(${i})">删除</button>
-      </div>`;
+    html+=`
+    <div>
+      ${e.date} | [${e.project}] ${e.payer}：${e.amount}<br>
+      <span style="color:#888;">参与人：${e.people.join(", ")}</span>
+      <button class="delete" onclick="remove(${i})">删</button>
+    </div><hr>`;
   });
-  document.getElementById("list").innerHTML = html;
+  document.getElementById("list").innerHTML=html;
 }
 
 function remove(i){
@@ -117,134 +137,123 @@ function remove(i){
 }
 
 function addExpense(){
-  let date = document.getElementById("date").value;
-  let project = document.getElementById("project").value.trim();
-  let payer = document.getElementById("payer").value.trim();
-  let amount = parseFloat(document.getElementById("amount").value);
-  let peopleRaw = document.getElementById("people").value.trim();
 
-  if(!date || !project || !payer || !amount || !peopleRaw){
+  let date=dateVal();
+  let project=val("project");
+  let payer=val("payer");
+  let amount=parseFloat(val("amount"));
+  let peopleRaw=val("peopleInput");
+
+  if(!date||!project||!payer||!amount||!peopleRaw){
     alert("请填写完整");
     return;
   }
 
-  let people = peopleRaw
-    .replace(/，/g,",")
+  let people=peopleRaw.replace(/，/g,",")
     .split(",")
     .map(p=>p.trim())
     .filter(p=>p);
 
+  // 去重
+  people=[...new Set(people)];
+
+  // 自动包含付款人
+  if(!people.includes(payer)) people.push(payer);
+
+  // 更新数据库
+  people.forEach(p=>peopleDB.add(p));
+  peopleDB.add(payer);
+
+  renderSelector();
+
   expenses.push({date,project,payer,amount,people});
+
   render();
 
-  document.getElementById("date").value="";
-  document.getElementById("project").value="";
-  document.getElementById("payer").value="";
-  document.getElementById("amount").value="";
-  document.getElementById("people").value="";
+  clearInputs();
 }
 
 function calculate(){
 
-  if(expenses.length===0){
-    alert("请先添加数据");
-    return;
+  let debtMap={};
+  let projectHTML="";
+
+  function addDebt(a,b,amt){
+    if(a===b)return;
+    if(!debtMap[a])debtMap[a]={};
+    if(!debtMap[a][b])debtMap[a][b]=0;
+    debtMap[a][b]+=amt;
   }
 
-  let debtMap = {};
-  let projectHTML = "";
-
-  function addDebt(from,to,amt){
-    if(from===to) return;
-    if(!debtMap[from]) debtMap[from]={};
-    if(!debtMap[from][to]) debtMap[from][to]=0;
-    debtMap[from][to]+=amt;
-  }
-
-  // ===== 每个项目 =====
   expenses.forEach(e=>{
-    let total = Math.round(e.amount*100);
-    let share = Math.floor(total/e.people.length);
+    let total=Math.round(e.amount*100);
+    let share=Math.floor(total/e.people.length);
 
-    let temp = {};
+    let temp={};
+    e.people.forEach(p=>temp[p]=-share);
+    temp[e.payer]+=total;
 
-    e.people.forEach(p=> temp[p]=-share);
-    temp[e.payer]=(temp[e.payer]||0)+total;
-
-    let debtors=[],creditors=[];
-
+    let d=[],c=[];
     for(let p in temp){
-      if(temp[p]<0) debtors.push({n:p,a:-temp[p]});
-      else if(temp[p]>0) creditors.push({n:p,a:temp[p]});
+      if(temp[p]<0)d.push({n:p,a:-temp[p]});
+      else if(temp[p]>0)c.push({n:p,a:temp[p]});
     }
 
-    let i=0,j=0,res="";
+    let res="",i=0,j=0;
 
-    while(i<debtors.length && j<creditors.length){
-      let pay=Math.min(debtors[i].a,creditors[j].a);
+    while(i<d.length && j<c.length){
+      let pay=Math.min(d[i].a,c[j].a);
 
-      addDebt(debtors[i].n,creditors[j].n,pay);
+      addDebt(d[i].n,c[j].n,pay);
 
-      res+=`${debtors[i].n} ➜ ${creditors[j].n} ：${(pay/100).toFixed(2)}<br>`;
+      res+=`${d[i].n} ➜ ${c[j].n}：${(pay/100).toFixed(2)}<br>`;
 
-      debtors[i].a-=pay;
-      creditors[j].a-=pay;
+      d[i].a-=pay; c[j].a-=pay;
 
-      if(debtors[i].a===0)i++;
-      if(creditors[j].a===0)j++;
+      if(d[i].a===0)i++;
+      if(c[j].a===0)j++;
     }
 
-    projectHTML+=`<div><b>【${e.project}】</b><br>${res}</div>`;
+    projectHTML+=`<div><b>${e.project}</b><br>${res}</div>`;
   });
 
   document.getElementById("projectResult").innerHTML=projectHTML;
 
-  // ===== 双向抵消 =====
-  let finalDebt={};
+  // 抵消
+  let final={};
 
   for(let a in debtMap){
     for(let b in debtMap[a]){
-      let ab=debtMap[a][b];
-      let ba=(debtMap[b]&&debtMap[b][a])||0;
-
-      let net=ab-ba;
-
+      let net=debtMap[a][b]-(debtMap[b]?.[a]||0);
       if(net>0){
-        if(!finalDebt[a]) finalDebt[a]={};
-        finalDebt[a][b]=net;
+        if(!final[a])final[a]={};
+        final[a][b]=net;
       }
     }
   }
 
-  // ===== 输出 =====
-  let result="";
-  for(let a in finalDebt){
-    for(let b in finalDebt[a]){
-      result+=`${a} ➜ ${b} ：${(finalDebt[a][b]/100).toFixed(2)}<br>`;
+  let res="";
+  for(let a in final){
+    for(let b in final[a]){
+      res+=`${a} ➜ ${b}：${(final[a][b]/100).toFixed(2)}<br>`;
     }
   }
 
-  document.getElementById("result").innerHTML=result||"已平账";
-
-  // ===== 校验 =====
-  let summary={};
-
-  for(let a in finalDebt){
-    for(let b in finalDebt[a]){
-      let amt=finalDebt[a][b];
-
-      summary[a]=(summary[a]||0)-amt;
-      summary[b]=(summary[b]||0)+amt;
-    }
-  }
-
-  let detail="";
-  for(let p in summary){
-    detail+=`${p}：${(summary[p]/100).toFixed(2)}<br>`;
-  }
-
-  document.getElementById("detail").innerHTML=detail;
+  document.getElementById("result").innerHTML=res||"已平账";
 }
+
+// ===== 工具函数 =====
+function val(id){ return document.getElementById(id).value.trim(); }
+function dateVal(){ return document.getElementById("date").value; }
+
+function clearInputs(){
+  ["date","project","payer","amount","peopleInput"].forEach(id=>{
+    document.getElementById(id).value="";
+  });
+}
+
+// 初始化
+renderSelector();
 
 </script>
 
