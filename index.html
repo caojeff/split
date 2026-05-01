@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>AA分账工具 Pro</title>
+<title>AA分账工具 Pro（项目独立结算版）</title>
 
 <style>
 body {
@@ -25,9 +25,7 @@ body {
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
-h2 {
-  text-align: center;
-}
+h2 { text-align: center; }
 
 input {
   width: 100%;
@@ -61,24 +59,16 @@ button.delete {
   margin-top: 5px;
 }
 
-.result {
-  color: green;
-  font-weight: bold;
-}
-
-.detail {
-  font-size: 14px;
-  line-height: 1.6;
-}
+.result { color: green; font-weight: bold; }
+.detail { font-size: 14px; line-height: 1.6; }
 </style>
-
 </head>
 
 <body>
 
 <div class="container">
 
-<h2>💰 AA分账工具 Pro（精确版）</h2>
+<h2>💰 AA分账工具 Pro（项目独立结算）</h2>
 
 <div class="card">
   <input type="date" id="date">
@@ -100,7 +90,12 @@ button.delete {
 </div>
 
 <div class="card">
-  <h3>结算结果</h3>
+  <h3>项目独立结算</h3>
+  <div id="projectResult"></div>
+</div>
+
+<div class="card">
+  <h3>结算结果（最终汇总）</h3>
   <div id="result" class="result"></div>
 </div>
 
@@ -175,29 +170,28 @@ function calculate(){
     return;
   }
 
-  let balance = {};
+  let projectHTML = "";
+  let finalBalance = {};
   let detailMap = {};
 
-  // 初始化
-  expenses.forEach(e=>{
-    e.people.forEach(p=>{
-      if(!balance[p]){
-        balance[p] = 0;
-        detailMap[p] = [];
-      }
-    });
-
-    if(!balance[e.payer]){
-      balance[e.payer] = 0;
-      detailMap[e.payer] = [];
-    }
-  });
-
-  // 计算（用“分”避免误差）
   expenses.forEach(e=>{
     let total = Math.round(e.amount * 100);
     let share = Math.floor(total / e.people.length);
 
+    let balance = {};
+
+    // 初始化
+    e.people.forEach(p=>{
+      balance[p] = 0;
+      if(!finalBalance[p]) finalBalance[p] = 0;
+      if(!detailMap[p]) detailMap[p] = [];
+    });
+
+    if(!balance[e.payer]) balance[e.payer] = 0;
+    if(!finalBalance[e.payer]) finalBalance[e.payer] = 0;
+    if(!detailMap[e.payer]) detailMap[e.payer] = [];
+
+    // 当前项目计算
     balance[e.payer] += total;
     detailMap[e.payer].push(`+ 支付【${e.project}】 ${e.amount}`);
 
@@ -206,39 +200,57 @@ function calculate(){
       detailMap[p].push(`- 分摊【${e.project}】 ${(share/100).toFixed(2)}`);
     });
 
-    // 余数处理
-    let remainder = total - share * e.people.length;
-    if(remainder > 0){
-      balance[e.payer] -= remainder;
+    // 汇总总账
+    for(let p in balance){
+      finalBalance[p] += balance[p];
     }
+
+    // ===== 项目内部结算 =====
+    let debtors = [];
+    let creditors = [];
+
+    for(let p in balance){
+      if(balance[p] < 0){
+        debtors.push({name:p, amt:-balance[p]});
+      } else if(balance[p] > 0){
+        creditors.push({name:p, amt:balance[p]});
+      }
+    }
+
+    debtors.sort((a,b)=>b.amt-a.amt);
+    creditors.sort((a,b)=>b.amt-a.amt);
+
+    let res = "";
+    let i=0, j=0;
+
+    while(i<debtors.length && j<creditors.length){
+      let pay = Math.min(debtors[i].amt, creditors[j].amt);
+
+      res += `${debtors[i].name} ➜ ${creditors[j].name} ：${(pay/100).toFixed(2)}<br>`;
+
+      debtors[i].amt -= pay;
+      creditors[j].amt -= pay;
+
+      if(debtors[i].amt === 0) i++;
+      if(creditors[j].amt === 0) j++;
+    }
+
+    projectHTML += `<div style="margin-bottom:10px;">
+      <b>【${e.project}】</b><br>${res}
+    </div>`;
   });
 
-  // ===== 详细过程 =====
-  let detailHTML = "";
+  document.getElementById("projectResult").innerHTML = projectHTML;
 
-  for(let p in balance){
-    detailHTML += `<div style="margin-bottom:10px;">`;
-    detailHTML += `<b>${p}</b><br>`;
-
-    detailMap[p].forEach(line=>{
-      detailHTML += `${line}<br>`;
-    });
-
-    detailHTML += `<b>= 合计：${(balance[p]/100).toFixed(2)}</b>`;
-    detailHTML += `</div>`;
-  }
-
-  document.getElementById("detail").innerHTML = detailHTML;
-
-  // ===== 精确核销 =====
+  // ===== 最终结算 =====
   let debtors = [];
   let creditors = [];
 
-  for(let p in balance){
-    if(balance[p] < 0){
-      debtors.push({name:p, amt:-balance[p]});
-    } else if(balance[p] > 0){
-      creditors.push({name:p, amt:balance[p]});
+  for(let p in finalBalance){
+    if(finalBalance[p] < 0){
+      debtors.push({name:p, amt:-finalBalance[p]});
+    } else if(finalBalance[p] > 0){
+      creditors.push({name:p, amt:finalBalance[p]});
     }
   }
 
@@ -248,12 +260,10 @@ function calculate(){
   let result = "";
   let i=0, j=0;
 
-  while(i < debtors.length && j < creditors.length){
+  while(i<debtors.length && j<creditors.length){
     let pay = Math.min(debtors[i].amt, creditors[j].amt);
 
-    if(pay > 0){
-      result += `${debtors[i].name} ➜ ${creditors[j].name} ：${(pay/100).toFixed(2)}<br>`;
-    }
+    result += `${debtors[i].name} ➜ ${creditors[j].name} ：${(pay/100).toFixed(2)}<br>`;
 
     debtors[i].amt -= pay;
     creditors[j].amt -= pay;
@@ -262,11 +272,15 @@ function calculate(){
     if(creditors[j].amt === 0) j++;
   }
 
-  if(result === ""){
-    result = "已完全平账 👍";
+  document.getElementById("result").innerHTML = result || "已平账 👍";
+
+  // ===== 明细 =====
+  let detailHTML = "";
+  for(let p in finalBalance){
+    detailHTML += `<div><b>${p}</b>：${(finalBalance[p]/100).toFixed(2)}</div>`;
   }
 
-  document.getElementById("result").innerHTML = result;
+  document.getElementById("detail").innerHTML = detailHTML;
 }
 
 render();
